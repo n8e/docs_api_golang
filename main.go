@@ -1,18 +1,20 @@
 package main
 
 import (
-	"log"
-	"net/http"
+	"docs_api_golang/configs"
+	"docs_api_golang/routes"
 
-	"github.com/gorilla/mux"
-	"github.com/n8e/rest-api/handlers"
+	"github.com/gofiber/fiber/v2"
 )
 
 func main() {
-	router := mux.NewRouter()
-	router.HandleFunc("/people", handlers.PersonsHandler).Methods("GET")
-	router.HandleFunc("/people/{id}", handlers.PersonHandler).Methods("GET")
-	router.HandleFunc("/people/{id}", handlers.CreatePersonHandler).Methods("POST")
-	router.HandleFunc("/people/{id}", handlers.DeletePersonHandler).Methods("DELETE")
-	log.Fatal(http.ListenAndServe(":8000", router))
+	app := fiber.New()
+
+	// run database
+	configs.ConnectDB()
+
+	// routes
+	routes.AllRoutes(app)
+
+	app.Listen(":8000")
 }
