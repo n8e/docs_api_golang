@@ -10,6 +10,8 @@ import (
 
 	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v2"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
@@ -49,86 +51,105 @@ func CreateUser(c *fiber.Ctx) error {
 	return c.Status(http.StatusCreated).JSON(responses.UserResponse{Status: http.StatusCreated, Message: "success", Data: &fiber.Map{"data": result}})
 }
 
-// func getUser(c *fiber.Ctx) {
-// 	collection, err := getMongoDbCollection(dbName, collectionName)
-// 	if err != nil {
-// 		c.Status(500).Send(err)
-// 		return
-// 	}
+func GetUser(c *fiber.Ctx) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	userId := c.Params("id")
+	var user models.UserSchema
+	defer cancel()
 
-// 	var filter bson.M = bson.M{}
+	objID, _ := primitive.ObjectIDFromHex(userId)
 
-// 	if c.Params("id") != "" {
-// 		id := c.Params("id")
-// 		objID, _ := primitive.ObjectIDFromHex(id)
-// 		filter = bson.M{"_id": objID}
-// 	}
+	err := userCollection.FindOne(ctx, bson.M{"_id": objID}).Decode(&user)
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(responses.UserResponse{Status: http.StatusInternalServerError, Message: "error", Data: &fiber.Map{"data": err.Error()}})
+	}
 
-// 	var results []bson.M
-// 	cur, err := collection.Find(context.Background(), filter)
-// 	defer cur.Close(context.Background())
+	return c.Status(http.StatusOK).JSON(responses.UserResponse{Status: http.StatusOK, Message: "success", Data: &fiber.Map{"data": user}})
+}
 
-// 	if err != nil {
-// 		c.Status(500).Send(err)
-// 		return
-// 	}
+func UpdateUser(c *fiber.Ctx) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	userId := c.Params("id")
+	var user models.UserSchema
+	defer cancel()
 
-// 	cur.All(context.Background(), &results)
+	objID, _ := primitive.ObjectIDFromHex(userId)
 
-// 	if results == nil {
-// 		c.SendStatus(404)
-// 		return
-// 	}
+	// validate the request body
+	if err := c.BodyParser(&user); err != nil {
+		return c.Status(http.StatusBadRequest).JSON(responses.UserResponse{Status: http.StatusBadRequest, Message: "error", Data: &fiber.Map{"data": err.Error()}})
+	}
 
-// 	json, _ := json.Marshal(results)
-// 	c.Send(json)
-// }
+	// use the validator library to validate reqiured fields
+	if validationErr := validate.Struct(&user); validationErr != nil {
+		return c.Status(http.StatusBadRequest).JSON(responses.UserResponse{Status: http.StatusBadRequest, Message: "error", Data: &fiber.Map{"data": validationErr.Error()}})
+	}
 
-// func updateUser(c *fiber.Ctx) {
-// 	collection, err := getMongoDbCollection(dbName, collectionName)
-// 	if err != nil {
-// 		c.Status(500).Send(err)
-// 		return
-// 	}
+	update := bson.M{"userName": user.UserName, "firstName": user.FirstName, "lastName": user.LastName, "email": user.Email, "password": user.Password, "role": user.Role}
 
-// 	var user User
-// 	json.Unmarshal([]byte(c.Body()), &user)
+	result, err := userCollection.UpdateOne(ctx, bson.M{"_id": objID}, bson.M{"$set": update})
 
-// 	update := bson.M{
-// 		"$set": user,
-// 	}
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(responses.UserResponse{Status: http.StatusInternalServerError, Message: "error", Data: &fiber.Map{"data": err.Error()}})
+	}
 
-// 	objID, _ := primitive.ObjectIDFromHex(c.Params("id"))
-// 	res, err := collection.UpdateOne(context.Background(), bson.M{"_id": objID}, update)
+	// get updated user details
+	var updatedUser models.UserSchema
+	if result.MatchedCount == 1 {
+		err := userCollection.FindOne(ctx, bson.M{"_id": objID}).Decode(&updatedUser)
 
-// 	if err != nil {
-// 		c.Status(500).Send(err)
-// 		return
-// 	}
+		if err != nil {
+			return c.Status(http.StatusInternalServerError).JSON(responses.UserResponse{Status: http.StatusInternalServerError, Message: "error", Data: &fiber.Map{"data": err.Error()}})
+		}
+	}
 
-// 	response, _ := json.Marshal(res)
-// 	c.Send(response)
-// }
+	return c.Status(http.StatusOK).JSON(responses.UserResponse{Status: http.StatusOK, Message: "success", Data: &fiber.Map{"data": updatedUser}})
+}
 
-// func deleteUser(c *fiber.Ctx) {
-// 	collection, err := getMongoDbCollection(dbName, collectionName)
+func DeleteUser(c *fiber.Ctx) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	userId := c.Params("id")
+	defer cancel()
 
-// 	if err != nil {
-// 		c.Status(500).Send(err)
-// 		return
-// 	}
+	objID, _ := primitive.ObjectIDFromHex(userId)
 
-// 	objID, _ := primitive.ObjectIDFromHex(c.Params("id"))
-// 	res, err := collection.DeleteOne(context.Background(), bson.M{"_id": objID})
+	result, err := userCollection.DeleteOne(ctx, bson.M{"_id": objID})
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(responses.UserResponse{Status: http.StatusInternalServerError, Message: "error", Data: &fiber.Map{"data": err.Error()}})
+	}
 
-// 	if err != nil {
-// 		c.Status(500).Send(err)
-// 		return
-// 	}
+	if result.DeletedCount < 1 {
+		return c.Status(http.StatusInternalServerError).JSON(responses.UserResponse{Status: http.StatusInternalServerError, Message: "error", Data: &fiber.Map{"data": "User with specified ID not found!"}})
+	}
 
-// 	jsonResponse, _ := json.Marshal(res)
-// 	c.Send(jsonResponse)
-// }
+	return c.Status(http.StatusOK).JSON(responses.UserResponse{Status: http.StatusOK, Message: "success", Data: &fiber.Map{"data": "User successfully deleted!"}})
+}
+
+func GetUsers(c *fiber.Ctx) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	var users []models.UserSchema
+	defer cancel()
+
+	results, err := userCollection.Find(ctx, bson.M{})
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(responses.UserResponse{Status: http.StatusInternalServerError, Message: "error", Data: &fiber.Map{"data": err.Error()}})
+	}
+
+	// reading from the db in an optimal way
+	defer results.Close(ctx)
+	for results.Next(ctx) {
+		var singleUser models.UserSchema
+		if err = results.Decode(&singleUser); err != nil {
+			return c.Status(http.StatusInternalServerError).JSON(responses.UserResponse{Status: http.StatusInternalServerError, Message: "error", Data: &fiber.Map{"data": err.Error()}})
+		}
+
+		users = append(users, singleUser)
+	}
+
+	return c.Status(http.StatusOK).JSON(responses.UserResponse{Status: http.StatusOK, Message: "success", Data: &fiber.Map{"data": users}})
+}
+
+// DOCUMENTS
 
 func CreateDocument(c *fiber.Ctx) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -161,103 +182,100 @@ func CreateDocument(c *fiber.Ctx) error {
 	return c.Status(http.StatusCreated).JSON(responses.DocumentResponse{Status: http.StatusCreated, Message: "success", Data: &fiber.Map{"data": result}})
 }
 
-// func createDocument(c *fiber.Ctx) {
-// 	collection, err := getMongoDbCollection(dbName, collectionName)
-// 	if err != nil {
-// 		c.Status(500).Send(err)
-// 		return
-// 	}
+func GetDocument(c *fiber.Ctx) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	documentId := c.Params("id")
+	var document models.DocumentSchema
+	defer cancel()
 
-// 	var document document.Document
-// 	json.Unmarshal([]byte(c.Body()), &document)
+	objID, _ := primitive.ObjectIDFromHex(documentId)
 
-// 	res, err := collection.InsertOne(context.Background(), document)
-// 	if err != nil {
-// 		c.Status(500).Send(err)
-// 		return
-// 	}
+	err := documentCollection.FindOne(ctx, bson.M{"_id": objID}).Decode(&document)
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(responses.DocumentResponse{Status: http.StatusInternalServerError, Message: "error", Data: &fiber.Map{"data": err.Error()}})
+	}
 
-// 	response, _ := json.Marshal(res)
-// 	c.Send(response)
-// }
+	return c.Status(http.StatusOK).JSON(responses.DocumentResponse{Status: http.StatusOK, Message: "success", Data: &fiber.Map{"data": document}})
+}
 
-// func getDocument(c *fiber.Ctx) {
-// 	collection, err := getMongoDbCollection(dbName, collectionName)
-// 	if err != nil {
-// 		c.Status(500).Send(err)
-// 		return
-// 	}
+func UpdateDocument(c *fiber.Ctx) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	documentId := c.Params("id")
+	var document models.DocumentSchema
+	defer cancel()
 
-// 	var filter bson.M = bson.M{}
+	objID, _ := primitive.ObjectIDFromHex(documentId)
 
-// 	if c.Params("id") != "" {
-// 		id := c.Params("id")
-// 		objID, _ := primitive.ObjectIDFromHex(id)
-// 		filter = bson.M{"_id": objID}
-// 	}
+	// validate the request body
+	if err := c.BodyParser(&document); err != nil {
+		return c.Status(http.StatusBadRequest).JSON(responses.DocumentResponse{Status: http.StatusBadRequest, Message: "error", Data: &fiber.Map{"data": err.Error()}})
+	}
 
-// 	var results []bson.M
-// 	cur, err := collection.Find(context.Background(), filter)
-// 	defer cur.Close(context.Background())
+	// use the validator library to validate reqiured fields
+	if validationErr := validate.Struct(&document); validationErr != nil {
+		return c.Status(http.StatusBadRequest).JSON(responses.DocumentResponse{Status: http.StatusBadRequest, Message: "error", Data: &fiber.Map{"data": validationErr.Error()}})
+	}
 
-// 	if err != nil {
-// 		c.Status(500).Send(err)
-// 		return
-// 	}
+	update := bson.M{"ownerId": document.OwnerId, "title": document.Title, "content": document.Content, "dateCreated": document.DateCreated, "lastModified": document.LastModified}
 
-// 	cur.All(context.Background(), &results)
+	result, err := documentCollection.UpdateOne(ctx, bson.M{"_id": objID}, bson.M{"$set": update})
 
-// 	if results == nil {
-// 		c.SendStatus(404)
-// 		return
-// 	}
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(responses.DocumentResponse{Status: http.StatusInternalServerError, Message: "error", Data: &fiber.Map{"data": err.Error()}})
+	}
 
-// 	json, _ := json.Marshal(results)
-// 	c.Send(json)
-// }
+	// get updated document details
+	var updatedDocument models.DocumentSchema
+	if result.MatchedCount == 1 {
+		err := documentCollection.FindOne(ctx, bson.M{"_id": objID}).Decode(&updatedDocument)
 
-// func updateDocument(c *fiber.Ctx) {
-// 	collection, err := getMongoDbCollection(dbName, collectionName)
-// 	if err != nil {
-// 		c.Status(500).Send(err)
-// 		return
-// 	}
+		if err != nil {
+			return c.Status(http.StatusInternalServerError).JSON(responses.DocumentResponse{Status: http.StatusInternalServerError, Message: "error", Data: &fiber.Map{"data": err.Error()}})
+		}
+	}
 
-// 	var document Document
-// 	json.Unmarshal([]byte(c.Body()), &document)
+	return c.Status(http.StatusOK).JSON(responses.DocumentResponse{Status: http.StatusOK, Message: "success", Data: &fiber.Map{"data": updatedDocument}})
+}
 
-// 	update := bson.M{
-// 		"$set": document,
-// 	}
+func DeleteDocument(c *fiber.Ctx) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	documentId := c.Params("id")
+	defer cancel()
 
-// 	objID, _ := primitive.ObjectIDFromHex(c.Params("id"))
-// 	res, err := collection.UpdateOne(context.Background(), bson.M{"_id": objID}, update)
+	objID, _ := primitive.ObjectIDFromHex(documentId)
 
-// 	if err != nil {
-// 		c.Status(500).Send(err)
-// 		return
-// 	}
+	result, err := documentCollection.DeleteOne(ctx, bson.M{"_id": objID})
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(responses.DocumentResponse{Status: http.StatusInternalServerError, Message: "error", Data: &fiber.Map{"data": err.Error()}})
+	}
 
-// 	response, _ := json.Marshal(res)
-// 	c.Send(response)
-// }
+	if result.DeletedCount < 1 {
+		return c.Status(http.StatusInternalServerError).JSON(responses.DocumentResponse{Status: http.StatusInternalServerError, Message: "error", Data: &fiber.Map{"data": "Document with specified ID not found!"}})
+	}
 
-// func deleteDocument(c *fiber.Ctx) {
-// 	collection, err := getMongoDbCollection(dbName, collectionName)
+	return c.Status(http.StatusOK).JSON(responses.DocumentResponse{Status: http.StatusOK, Message: "success", Data: &fiber.Map{"data": "Document successfully deleted!"}})
+}
 
-// 	if err != nil {
-// 		c.Status(500).Send(err)
-// 		return
-// 	}
+func GetDocuments(c *fiber.Ctx) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	var documents []models.DocumentSchema
+	defer cancel()
 
-// 	objID, _ := primitive.ObjectIDFromHex(c.Params("id"))
-// 	res, err := collection.DeleteOne(context.Background(), bson.M{"_id": objID})
+	results, err := documentCollection.Find(ctx, bson.M{})
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(responses.DocumentResponse{Status: http.StatusInternalServerError, Message: "error", Data: &fiber.Map{"data": err.Error()}})
+	}
 
-// 	if err != nil {
-// 		c.Status(500).Send(err)
-// 		return
-// 	}
+	// reading from the db in an optimal way
+	defer results.Close(ctx)
+	for results.Next(ctx) {
+		var singleDocument models.DocumentSchema
+		if err = results.Decode(&singleDocument); err != nil {
+			return c.Status(http.StatusInternalServerError).JSON(responses.DocumentResponse{Status: http.StatusInternalServerError, Message: "error", Data: &fiber.Map{"data": err.Error()}})
+		}
 
-// 	jsonResponse, _ := json.Marshal(res)
-// 	c.Send(jsonResponse)
-// }
+		documents = append(documents, singleDocument)
+	}
+
+	return c.Status(http.StatusOK).JSON(responses.DocumentResponse{Status: http.StatusOK, Message: "success", Data: &fiber.Map{"data": documents}})
+}

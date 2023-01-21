@@ -7,15 +7,15 @@ import (
 )
 
 func AllRoutes(app *fiber.App) {
-	// app.Get("/users", handlers.getUser)
-	// app.Get("/users/:id?", handlers.getUser)
-	// app.Put("/users/:id", handlers.updateUser)
+	app.Get("/users", controllers.GetUsers)
+	app.Get("/users/:id", controllers.GetUser)
+	app.Put("/users/:id", controllers.UpdateUser)
 	app.Post("/users", controllers.CreateUser)
-	// app.Delete("/users/:id", handlers.deleteUser)
+	app.Delete("/users/:id", controllers.DeleteUser)
 
-	// app.Get("/documents", handlers.getDocument)
-	// app.Get("/documents/:id?", handlers.getDocument)
-	// app.Put("/documents/:id", handlers.updateDocument)
+	app.Get("/documents", controllers.GetDocuments)
+	app.Get("/documents/:id?", controllers.GetDocument)
+	app.Put("/documents/:id", controllers.UpdateDocument)
 	app.Post("/documents", controllers.CreateDocument)
-	// app.Delete("/documents/:id", handlers.deleteDocument)
+	app.Delete("/documents/:id", controllers.DeleteDocument)
 }
