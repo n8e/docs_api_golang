@@ -1,17 +1,17 @@
 package models
 
-type Role string
+type RoleType string
 
 const (
-	User          Role = "User"
-	Administrator      = "Administrator"
+	User          RoleType = "User"
+	Administrator RoleType = "Administrator"
 )
 
 type UserSchema struct {
-	UserName  string `json:"username,omitempty" validate:"required"`
-	FirstName string `json:"firstname,omitempty"`
-	LastName  string `json:"lastname,omitempty"`
-	Email     string `json:"email,omitempty" validate:"required"`
-	Password  string `json:"password,omitempty"`
-	Role      *Role  `json:"role,omitempty"`
+	UserName  string   `json:"username,omitempty" validate:"required"`
+	FirstName string   `json:"firstname,omitempty"`
+	LastName  string   `json:"lastname,omitempty"`
+	Email     string   `json:"email,omitempty" validate:"required,email"`
+	Password  string   `json:"password,omitempty"`
+	Role      RoleType `json:"role" validate:"required,oneof=User Administrator"`
 }
