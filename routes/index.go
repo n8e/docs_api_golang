@@ -7,6 +7,8 @@ import (
 )
 
 func AllRoutes(app *fiber.App) {
+	app.Post("/auth", controllers.Auth)
+
 	app.Get("/users", controllers.GetUsers)
 	app.Get("/users/:id", controllers.GetUser)
 	app.Put("/users/:id", controllers.UpdateUser)

@@ -5,6 +5,7 @@ import (
 	"docs_api_golang/configs"
 	"docs_api_golang/models"
 	"docs_api_golang/responses"
+	"docs_api_golang/utils"
 	"net/http"
 	"time"
 
@@ -14,6 +15,11 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 )
+
+type AuthResponse struct {
+	User  models.UserSchema
+	Token string
+}
 
 var documentCollection *mongo.Collection = configs.GetCollection(configs.DB, "documents")
 var userCollection *mongo.Collection = configs.GetCollection(configs.DB, "users")
@@ -34,12 +40,15 @@ func CreateUser(c *fiber.Ctx) error {
 		return c.Status(http.StatusBadRequest).JSON(responses.UserResponse{Status: http.StatusBadRequest, Message: "error", Data: &fiber.Map{"data": validationErr.Error()}})
 	}
 
+	// hash password
+	var hashedPassword, _ = utils.HashPassword(user.Password)
+
 	newUser := models.UserSchema{
 		UserName:  user.UserName,
 		FirstName: user.FirstName,
 		LastName:  user.LastName,
 		Email:     user.Email,
-		Password:  user.Password,
+		Password:  hashedPassword,
 		Role:      user.Role,
 	}
 
@@ -49,6 +58,41 @@ func CreateUser(c *fiber.Ctx) error {
 	}
 
 	return c.Status(http.StatusCreated).JSON(responses.UserResponse{Status: http.StatusCreated, Message: "success", Data: &fiber.Map{"data": result}})
+}
+
+func Auth(c *fiber.Ctx) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	var user models.UserSchema
+	defer cancel()
+
+	// validate the request body
+	if err := c.BodyParser(&user); err != nil {
+		return c.Status(http.StatusBadRequest).JSON(responses.UserResponse{Status: http.StatusBadRequest, Message: "error", Data: &fiber.Map{"data": err.Error()}})
+	}
+
+	// use the validator library to validate required fields
+	if validationErr := validate.Struct(&user); validationErr != nil {
+		return c.Status(http.StatusBadRequest).JSON(responses.UserResponse{Status: http.StatusBadRequest, Message: "error", Data: &fiber.Map{"data": validationErr.Error()}})
+	}
+
+	// get user from db if username or email is provided
+	var dbUser models.UserSchema
+	err := userCollection.FindOne(ctx, bson.M{"$or": []bson.M{{"email": user.Email}, {"userName": user.UserName}}}).Decode(&dbUser)
+	if err != nil {
+		return c.Status(http.StatusNotFound).JSON(responses.UserResponse{Status: http.StatusNotFound, Message: "error", Data: &fiber.Map{"data": "We do not have a user by that email or username!"}})
+	}
+
+	// compare given password, and throw error
+	var isPasswordCorrect bool
+	isPasswordCorrect = utils.CheckPasswordHash(user.Password, dbUser.Password)
+	if isPasswordCorrect != true {
+		return c.Status(http.StatusInternalServerError).JSON(responses.UserResponse{Status: http.StatusInternalServerError, Message: "error", Data: &fiber.Map{"data": "Wrong password provided for this user!"}})
+	}
+
+	// return user and jwt token
+	var token, _ = utils.GenerateJWT(dbUser.Email)
+	authResponse := AuthResponse{User: dbUser, Token: token}
+	return c.Status(http.StatusOK).JSON(responses.UserResponse{Status: http.StatusOK, Message: "success", Data: &fiber.Map{"data": authResponse}})
 }
 
 func GetUser(c *fiber.Ctx) error {
@@ -85,7 +129,10 @@ func UpdateUser(c *fiber.Ctx) error {
 		return c.Status(http.StatusBadRequest).JSON(responses.UserResponse{Status: http.StatusBadRequest, Message: "error", Data: &fiber.Map{"data": validationErr.Error()}})
 	}
 
-	update := bson.M{"userName": user.UserName, "firstName": user.FirstName, "lastName": user.LastName, "email": user.Email, "password": user.Password, "role": user.Role}
+	// hash password
+	var hashedPassword, _ = utils.HashPassword(user.Password)
+
+	update := bson.M{"userName": user.UserName, "firstName": user.FirstName, "lastName": user.LastName, "email": user.Email, "password": hashedPassword, "role": user.Role}
 
 	result, err := userCollection.UpdateOne(ctx, bson.M{"_id": objID}, bson.M{"$set": update})
 
