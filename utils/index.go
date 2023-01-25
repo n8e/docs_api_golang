@@ -9,7 +9,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-var secretKey = []byte(configs.EnvJWTSecretKey())
+var secretKey = []byte(configs.EnvVariable("JWT_SECRET_KEY"))
 
 func HashPassword(password string) (string, error) {
 	bytes, err := bcrypt.GenerateFromPassword([]byte(password), 14)
