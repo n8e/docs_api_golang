@@ -21,7 +21,6 @@ type AuthResponse struct {
 	Token string
 }
 
-var documentCollection *mongo.Collection = configs.GetCollection(configs.DB, "documents")
 var userCollection *mongo.Collection = configs.GetCollection(configs.DB, "users")
 var validate = validator.New()
 

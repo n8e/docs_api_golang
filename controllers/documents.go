@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	"docs_api_golang/configs"
 	"docs_api_golang/models"
 	"docs_api_golang/responses"
 	"net/http"
@@ -10,7 +11,10 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 )
+
+var documentCollection *mongo.Collection = configs.GetCollection(configs.DB, "documents")
 
 func CreateDocument(c *fiber.Ctx) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
