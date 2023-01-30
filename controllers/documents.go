@@ -47,8 +47,8 @@ func CreateDocument(c *fiber.Ctx) error {
 		OwnerId:      dbUser.Id, // should be obtained from authenticated user
 		Title:        document.Title,
 		Content:      document.Content,
-		DateCreated:  document.DateCreated,
-		LastModified: document.LastModified,
+		DateCreated:  time.Now(),
+		LastModified: time.Now(),
 	}
 
 	result, err := documentCollection.InsertOne(ctx, newDocument)
@@ -127,7 +127,7 @@ func UpdateDocument(c *fiber.Ctx) error {
 		return c.Status(http.StatusForbidden).JSON(responses.DocumentResponse{Status: http.StatusForbidden, Message: "error", Data: &fiber.Map{"data": "The logged in user is not authorisd to update this document"}})
 	}
 
-	update := bson.M{"ownerId": document.OwnerId, "title": document.Title, "content": document.Content, "dateCreated": document.DateCreated, "lastModified": document.LastModified}
+	update := bson.M{"ownerId": document.OwnerId, "title": document.Title, "content": document.Content, "dateCreated": document.DateCreated, "lastModified": time.Now()}
 
 	result, err := documentCollection.UpdateOne(ctx, bson.M{"id": objID}, bson.M{"$set": update})
 
